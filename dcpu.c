@@ -3,8 +3,10 @@
 
 
 // http://0x10c.com/doc/dcpu-16.txt
-// NOTE: I'm going to represent basic opcodes in a char as 0000oooo
+// NOTE: I'm going to represent basic opcodes in an unsigned char as 0000oooo
 // 			and non-basic as 10oooooo
+
+#define RAM_SIZE 0x10000
 
 typedef struct s_dcpu
 {
@@ -17,7 +19,7 @@ typedef struct s_dcpu
 	// Stack Pointer
 	unsigned short SP;
 	// Memory
-	unsigned short RAM[0x10000];
+	unsigned short RAM[RAM_SIZE];
 } dcpu_t;
 
 
@@ -30,36 +32,6 @@ dcpu_t *dcpu_make()
 	}
 	cpu->SP = 0xffff;
 	return cpu;
-}
-
-void dcpu_print_state(dcpu_t *cpu)
-{
-	printf("A:%04x B:%04x C:%04x X:%04x Y:%04x Z:%04x I:%04x J:%04x O:%04x PC:%04x SP:%04x \n"
-		, cpu->A
-		, cpu->B
-		, cpu->C
-		, cpu->X
-		, cpu->Y
-		, cpu->Z
-		, cpu->I
-		, cpu->J
-		, cpu->J
-		, cpu->O
-		, cpu->PC
-		, cpu->SP);
-}
-
-void dcpu_print_video(dcpu_t *cpu)
-{
-	int base = 0x8000;
-	char row = 0;
-	char col = 0; 
-	for (row = 0; row < 12; row++) {
-		for (col = 0; col < 32; col++) {
-			printf("%c", cpu->RAM[base + (row * 32 + col)]);
-		}
-		printf("\n");
-	}
 }
 
 unsigned short dcpu_inst_make(char op, char a, char b)
@@ -161,13 +133,7 @@ unsigned short *dcpu_point_at_value(dcpu_t *cpu, unsigned char val)
 		return cpu->RAM + next_word;
 	}
 	// can't reference literals
-	// next word (literal)
-	// if (val == 0x1f) {
-	// 	next_word = cpu->RAM[cpu->PC++];
-	// 	return next_word;
-	// }
-	// // literal value 0x00-0x1f (literal)
-	// return val - 0x20;
+	return NULL;
 }
 
 unsigned short dcpu_get_value(dcpu_t *cpu, unsigned char val)
@@ -183,12 +149,12 @@ unsigned short dcpu_get_value(dcpu_t *cpu, unsigned char val)
 		return next_word;
 	}
 	// literal value 0x00-0x1f (literal)
-	if (val >= 0x20) {
-		return val - 0x20;
-	}
+	//if (val >= 0x20) {
+	return val - 0x20;
+	//}
 }
 
-unsigned short dcpu_exec1(dcpu_t *cpu)
+void dcpu_exec1(dcpu_t *cpu)
 {
 	// executes the next instruction
 	unsigned char op, a, b;
@@ -197,6 +163,36 @@ unsigned short dcpu_exec1(dcpu_t *cpu)
 	// SET a, b - sets a to b
 	if (op == 0x1) {
 		*(dcpu_point_at_value(cpu, a)) = dcpu_get_value(cpu, b);
+	}
+}
+
+
+void dcpu_print_state(dcpu_t *cpu)
+{
+	printf("A:%04x B:%04x C:%04x X:%04x Y:%04x Z:%04x I:%04x J:%04x O:%04x PC:%04x SP:%04x \n"
+		, cpu->A
+		, cpu->B
+		, cpu->C
+		, cpu->X
+		, cpu->Y
+		, cpu->Z
+		, cpu->I
+		, cpu->J
+		, cpu->O
+		, cpu->PC
+		, cpu->SP);
+}
+
+void dcpu_print_video(dcpu_t *cpu)
+{
+	int base = 0x8000;
+	char row = 0;
+	char col = 0; 
+	for (row = 0; row < 12; row++) {
+		for (col = 0; col < 32; col++) {
+			printf("%c", cpu->RAM[base + (row * 32 + col)]);
+		}
+		printf("\n");
 	}
 }
 
@@ -209,7 +205,7 @@ void print_bits(unsigned short word)
 	printf("\n");
 }
 
-int main(int argc, char *argv)
+int main(int argc, char *argv[])
 {
 	dcpu_t *cpu = dcpu_make();
 
@@ -278,8 +274,8 @@ int main(int argc, char *argv)
 	dcpu_exec1(cpu);
 	dcpu_print_video(cpu);
 
-	unsigned short bad = dcpu_point_at_value(cpu, 0x20);
-	printf("bad: %04x\n", bad);
+	// unsigned short *bad = dcpu_point_at_value(cpu, 0x20);
+	// printf("bad: %p\n", bad);
 
 	return 0;
 }
