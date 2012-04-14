@@ -1,9 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 
 // http://0x10c.com/doc/dcpu-16.txt
-// NOTE: I'm going to represent basic opcodes in an unsigned char as 0000oooo
+// NOTE: I'm going to represent basic opcodes in an uint8_t as 0000oooo
 // 			and non-basic as 10oooooo
 
 #define RAM_SIZE 0x10000
@@ -11,15 +13,15 @@
 typedef struct s_dcpu
 {
 	// Registers
-	unsigned short A, B, C, X, Y, Z, I, J;
+	uint16_t A, B, C, X, Y, Z, I, J;
 	// Overflow
-	unsigned short O;
+	uint16_t O;
 	// Program Counter
-	unsigned short PC;
+	uint16_t PC;
 	// Stack Pointer
-	unsigned short SP;
+	uint16_t SP;
 	// Memory
-	unsigned short RAM[RAM_SIZE];
+	uint16_t RAM[RAM_SIZE];
 } dcpu_t;
 
 
@@ -34,7 +36,7 @@ dcpu_t *dcpu_make()
 	return cpu;
 }
 
-unsigned short dcpu_inst_make(char op, char a, char b)
+uint16_t dcpu_inst_make(uint8_t op, uint8_t a, uint8_t b)
 {
 	if ((op & 0x80) == 0) {
 		// basic bbbbbbaaaaaaoooo
@@ -45,27 +47,21 @@ unsigned short dcpu_inst_make(char op, char a, char b)
 	}
 }
 
-void dcpu_inst_parse(unsigned short word, unsigned char *op, unsigned char *a, unsigned char *b)
+void dcpu_inst_parse(uint16_t word, uint8_t *op, uint8_t *a, uint8_t *b)
 {
-	// printf("parsing %x\n", word);
 	*op = word & 0x0f;
-	// printf("op %x\n", *op);
-	if (*op != 0) { // basic
-		// bbbbbbaaaaaaoooo
+	if (*op != 0) { // basic bbbbbbaaaaaaoooo
 		*a  = ((word >> 4) & 0x3f);
 		*b  = (word >> 10);
-	} else { // non-basic
-		// aaaaaaoooooo0000
-		// printf("looks like op is non-basic\n");
+	} else { // non-basic  aaaaaaoooooo0000
 		*op = ((word >> 4) & 0x3f) | 0x80; //set the high-bit to indicate non-basic
 		*a = (word >> 10);
 		*b = 0;
 	}
-	printf("Parsed %08x as op:%02x a:%02x b:%02x\n", word, *op, *a, *b);
 }
 
 // returns a pointer to something based on the provided reference
-unsigned short *dcpu_ref(dcpu_t *cpu, unsigned char ref)
+uint16_t *dcpu_ref(dcpu_t *cpu, uint8_t ref)
 {
 	//    Reference: meaning
 	//    0x00-0x07: register (A, B, C, X, Y, Z, I or J, in that order)
@@ -81,7 +77,7 @@ unsigned short *dcpu_ref(dcpu_t *cpu, unsigned char ref)
 	//         0x1f: next word (literal)
 	//    0x20-0x3f: literal value 0x00-0x1f (literal)
 
-	unsigned short next_word;
+	uint16_t next_word;
 
 	// registers
 	if (ref == 0x00) return &(cpu->A);
@@ -131,21 +127,20 @@ unsigned short *dcpu_ref(dcpu_t *cpu, unsigned char ref)
 	// [next word]
 	if (ref == 0x1e) {
 		next_word = cpu->RAM[cpu->PC++];
-		printf("trying to point at %08x in RAM\n", next_word);
 		return cpu->RAM + next_word;
 	}
 	// can't reference literals
 	return NULL;
 }
 
-char is_literal(unsigned char ref)
+bool is_literal(uint8_t ref)
 {
 	// 0x1f: reference to the next word as a literal
 	// 0x20-0x3f: this ref is a value (ref - 0x20)
-	return ref <= 0x1f;
+	return (ref <= 0x1f);
 }
 
-unsigned short dcpu_value(dcpu_t *cpu, unsigned char ref)
+uint16_t dcpu_value(dcpu_t *cpu, uint8_t ref)
 {
 	// for most references just deref the pointer
 	if (ref <= 0x1e) {		
@@ -153,7 +148,7 @@ unsigned short dcpu_value(dcpu_t *cpu, unsigned char ref)
 	}
 	// next word (literal)
 	if (ref == 0x1f) {
-		unsigned short next_word;
+		uint16_t next_word;
 		next_word = cpu->RAM[cpu->PC++];
 		return next_word;
 	}
@@ -164,7 +159,7 @@ unsigned short dcpu_value(dcpu_t *cpu, unsigned char ref)
 void dcpu_exec1(dcpu_t *cpu)
 {
 	// executes the next instruction
-	unsigned char op, a, b;
+	uint8_t op, a, b;
 	dcpu_inst_parse(cpu->RAM[cpu->PC++], &op, &a, &b);
 
 	// SET a, b - sets a to b
@@ -205,7 +200,7 @@ void dcpu_print_video(dcpu_t *cpu)
 	}
 }
 
-void print_bits(unsigned short word)
+void print_bits(uint16_t word)
 {
 	char i = 0;
 	for (i = 15; i >= 0; i--) {
@@ -237,7 +232,7 @@ int main(int argc, char *argv[])
 
 	// enter a simple program
 	// cpu->RAM[0] = dcpu_inst_make(0xf, 0xa, 0xb);
-	// unsigned char op, a, b;
+	// uint8_t op, a, b;
 	// cpu->RAM[0] = dcpu_inst_make(0x1 | 0x80, 0xa, 0xb);
 	// dcpu_inst_parse(cpu->RAM[0], &op, &a, &b);
 
@@ -287,7 +282,7 @@ int main(int argc, char *argv[])
 	// SET 0, A
 	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x20, 0x0);
 
-	// unsigned short *bad = dcpu_point_at_value(cpu, 0x20);
+	// uint16_t *bad = dcpu_point_at_value(cpu, 0x20);
 	// printf("bad: %p\n", bad);
 
 	return 0;
