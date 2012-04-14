@@ -64,70 +64,72 @@ void dcpu_inst_parse(unsigned short word, unsigned char *op, unsigned char *a, u
 	printf("Parsed %08x as op:%02x a:%02x b:%02x\n", word, *op, *a, *b);
 }
 
-unsigned short *dcpu_point_at_value(dcpu_t *cpu, unsigned char val)
+// returns a pointer to something based on the provided reference
+unsigned short *dcpu_ref(dcpu_t *cpu, unsigned char ref)
 {
- //    0x00-0x07: register (A, B, C, X, Y, Z, I or J, in that order)
- //    0x08-0x0f: [register]
- //    0x10-0x17: [next word + register]
- //         0x18: POP / [SP++]
- //         0x19: PEEK / [SP]
- //         0x1a: PUSH / [--SP]
- //         0x1b: SP
- //         0x1c: PC
- //         0x1d: O
- //         0x1e: [next word]
- //         0x1f: next word (literal)
- //    0x20-0x3f: literal value 0x00-0x1f (literal)
+	//    Reference: meaning
+	//    0x00-0x07: register (A, B, C, X, Y, Z, I or J, in that order)
+	//    0x08-0x0f: [register]
+	//    0x10-0x17: [next word + register]
+	//         0x18: POP / [SP++]
+	//         0x19: PEEK / [SP]
+	//         0x1a: PUSH / [--SP]
+	//         0x1b: SP
+	//         0x1c: PC
+	//         0x1d: O
+	//         0x1e: [next word]
+	//         0x1f: next word (literal)
+	//    0x20-0x3f: literal value 0x00-0x1f (literal)
 
 	unsigned short next_word;
 
 	// registers
-	if (val == 0x00) return &(cpu->A);
-	if (val == 0x01) return &(cpu->B);
-	if (val == 0x02) return &(cpu->C);
-	if (val == 0x03) return &(cpu->X);
-	if (val == 0x04) return &(cpu->Y);
-	if (val == 0x05) return &(cpu->Z);
-	if (val == 0x06) return &(cpu->I);
-	if (val == 0x07) return &(cpu->J);
+	if (ref == 0x00) return &(cpu->A);
+	if (ref == 0x01) return &(cpu->B);
+	if (ref == 0x02) return &(cpu->C);
+	if (ref == 0x03) return &(cpu->X);
+	if (ref == 0x04) return &(cpu->Y);
+	if (ref == 0x05) return &(cpu->Z);
+	if (ref == 0x06) return &(cpu->I);
+	if (ref == 0x07) return &(cpu->J);
 
 	// [register]
-	if (val == 0x08) return cpu->RAM + cpu->A;
-	if (val == 0x09) return cpu->RAM + cpu->B;
-	if (val == 0x0a) return cpu->RAM + cpu->C;
-	if (val == 0x0b) return cpu->RAM + cpu->X;
-	if (val == 0x0c) return cpu->RAM + cpu->Y;
-	if (val == 0x0d) return cpu->RAM + cpu->Z;
-	if (val == 0x0e) return cpu->RAM + cpu->I;
-	if (val == 0x0f) return cpu->RAM + cpu->J;
+	if (ref == 0x08) return cpu->RAM + cpu->A;
+	if (ref == 0x09) return cpu->RAM + cpu->B;
+	if (ref == 0x0a) return cpu->RAM + cpu->C;
+	if (ref == 0x0b) return cpu->RAM + cpu->X;
+	if (ref == 0x0c) return cpu->RAM + cpu->Y;
+	if (ref == 0x0d) return cpu->RAM + cpu->Z;
+	if (ref == 0x0e) return cpu->RAM + cpu->I;
+	if (ref == 0x0f) return cpu->RAM + cpu->J;
 
 	// [next word + register]
-	if (val >= 0x10 && val <= 0x17) {
+	if (ref >= 0x10 && ref <= 0x17) {
 		next_word = cpu->RAM[cpu->PC++];
-		if (val == 0x10) return cpu->RAM + cpu->A + next_word;
-		if (val == 0x11) return cpu->RAM + cpu->B + next_word;
-		if (val == 0x12) return cpu->RAM + cpu->C + next_word;
-		if (val == 0x13) return cpu->RAM + cpu->X + next_word;
-		if (val == 0x14) return cpu->RAM + cpu->Y + next_word;
-		if (val == 0x15) return cpu->RAM + cpu->Z + next_word;
-		if (val == 0x16) return cpu->RAM + cpu->I + next_word;
-		if (val == 0x17) return cpu->RAM + cpu->J + next_word;
+		if (ref == 0x10) return cpu->RAM + cpu->A + next_word;
+		if (ref == 0x11) return cpu->RAM + cpu->B + next_word;
+		if (ref == 0x12) return cpu->RAM + cpu->C + next_word;
+		if (ref == 0x13) return cpu->RAM + cpu->X + next_word;
+		if (ref == 0x14) return cpu->RAM + cpu->Y + next_word;
+		if (ref == 0x15) return cpu->RAM + cpu->Z + next_word;
+		if (ref == 0x16) return cpu->RAM + cpu->I + next_word;
+		if (ref == 0x17) return cpu->RAM + cpu->J + next_word;
 	}
 
 	// POP
-	if (val == 0x18) return cpu->RAM + cpu->SP++;
+	if (ref == 0x18) return cpu->RAM + cpu->SP++;
 	// PEEK
-	if (val == 0x19) return cpu->RAM + cpu->SP;
+	if (ref == 0x19) return cpu->RAM + cpu->SP;
 	// PUSH
-	if (val == 0x1a) return cpu->RAM + (--(cpu->SP));
+	if (ref == 0x1a) return cpu->RAM + (--(cpu->SP));
 	// SP
-	if (val == 0x1b) return &(cpu->SP);
+	if (ref == 0x1b) return &(cpu->SP);
 	// PC
-	if (val == 0x1c) return &(cpu->PC);
+	if (ref == 0x1c) return &(cpu->PC);
 	// O
-	if (val == 0x1d) return &(cpu->O);
+	if (ref == 0x1d) return &(cpu->O);
 	// [next word]
-	if (val == 0x1e) {
+	if (ref == 0x1e) {
 		next_word = cpu->RAM[cpu->PC++];
 		printf("trying to point at %08x in RAM\n", next_word);
 		return cpu->RAM + next_word;
@@ -136,22 +138,27 @@ unsigned short *dcpu_point_at_value(dcpu_t *cpu, unsigned char val)
 	return NULL;
 }
 
-unsigned short dcpu_get_value(dcpu_t *cpu, unsigned char val)
+char is_literal(unsigned char ref)
+{
+	// 0x1f: reference to the next word as a literal
+	// 0x20-0x3f: this ref is a value (ref - 0x20)
+	return ref <= 0x1f;
+}
+
+unsigned short dcpu_value(dcpu_t *cpu, unsigned char ref)
 {
 	// for most references just deref the pointer
-	if (val <= 0x1e) {		
-		return *dcpu_point_at_value(cpu, val);
+	if (ref <= 0x1e) {		
+		return *dcpu_ref(cpu, ref);
 	}
 	// next word (literal)
-	if (val == 0x1f) {
+	if (ref == 0x1f) {
 		unsigned short next_word;
 		next_word = cpu->RAM[cpu->PC++];
 		return next_word;
 	}
 	// literal value 0x00-0x1f (literal)
-	//if (val >= 0x20) {
-	return val - 0x20;
-	//}
+	return ref - 0x20; // ref >= 0x20)
 }
 
 void dcpu_exec1(dcpu_t *cpu)
@@ -162,10 +169,12 @@ void dcpu_exec1(dcpu_t *cpu)
 
 	// SET a, b - sets a to b
 	if (op == 0x1) {
-		*(dcpu_point_at_value(cpu, a)) = dcpu_get_value(cpu, b);
+		// fail silently if trying to assign to a literal
+		if (is_literal(a) == 0) {
+			*(dcpu_ref(cpu, a)) = dcpu_value(cpu, b);
+		}
 	}
 }
-
 
 void dcpu_print_state(dcpu_t *cpu)
 {
@@ -243,36 +252,40 @@ int main(int argc, char *argv[])
 	// dcpu_exec1(cpu);
 	// printf("B: %02x\n", cpu->B);
 
-	// SET C, 0x8000 (stored in next word)
-	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x2, 0x1f);
-	cpu->RAM[cpu->PC+1] = 0x8000;
-	dcpu_exec1(cpu);
-	printf("C: %02x\n", cpu->C);
+	// // SET C, 0x8000 (stored in next word)
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x2, 0x1f);
+	// cpu->RAM[cpu->PC+1] = 0x8000;
+	// dcpu_exec1(cpu);
+	// printf("C: %02x\n", cpu->C);
 
-	// SET [C], 0x0048 (stored in next word)
-	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x0a, 0x1f);
-	cpu->RAM[cpu->PC+1] = 0x0048;
-	dcpu_exec1(cpu);
-	dcpu_print_video(cpu);
+	// // SET [C], 0x0048 (stored in next word)
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x0a, 0x1f);
+	// cpu->RAM[cpu->PC+1] = 0x0048;
+	// dcpu_exec1(cpu);
+	// dcpu_print_video(cpu);
 
-	// SET [next word], next word
-	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1e, 0x1f);
-	cpu->RAM[cpu->PC+1] = 0x8001; // next word (address of video RAM satrt)
-	cpu->RAM[cpu->PC+2] = 0x0065; // next word ('e')
-	dcpu_exec1(cpu);
-	dcpu_print_video(cpu);
-	// SET [next word], next word
-	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1e, 0x1f);
-	cpu->RAM[cpu->PC+1] = 0x8002; // next word (address of video RAM satrt)
-	cpu->RAM[cpu->PC+2] = 0x006c; // next word ('l')
-	dcpu_exec1(cpu);
-	dcpu_print_video(cpu);
-	// SET [next word], [next word]
-	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1e, 0x1e);
-	cpu->RAM[cpu->PC+1] = 0x8003; // next word (address of video RAM satrt)
-	cpu->RAM[cpu->PC+2] = 0x8002; // next word [0x8002] -> 'l'
-	dcpu_exec1(cpu);
-	dcpu_print_video(cpu);
+	// // SET [next word], next word
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1e, 0x1f);
+	// cpu->RAM[cpu->PC+1] = 0x8001; // next word (address of video RAM satrt)
+	// cpu->RAM[cpu->PC+2] = 0x0065; // next word ('e')
+	// dcpu_exec1(cpu);
+	// dcpu_print_video(cpu);
+	// // SET [next word], next word
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1e, 0x1f);
+	// cpu->RAM[cpu->PC+1] = 0x8002; // next word (address of video RAM satrt)
+	// cpu->RAM[cpu->PC+2] = 0x006c; // next word ('l')
+	// dcpu_exec1(cpu);
+	// dcpu_print_video(cpu);
+	// // SET [next word], [next word]
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1e, 0x1e);
+	// cpu->RAM[cpu->PC+1] = 0x8003; // next word (address of video RAM satrt)
+	// cpu->RAM[cpu->PC+2] = 0x8002; // next word [0x8002] -> 'l'
+	// dcpu_exec1(cpu);
+	// dcpu_print_video(cpu);
+
+	// test assigning to a literal
+	// SET 0, A
+	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x20, 0x0);
 
 	// unsigned short *bad = dcpu_point_at_value(cpu, 0x20);
 	// printf("bad: %p\n", bad);
