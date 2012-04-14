@@ -8,7 +8,10 @@
 // NOTE: I'm going to represent basic opcodes in an uint8_t as 0000oooo
 // 			and non-basic as 10oooooo
 
-#define RAM_SIZE 0x10000
+#define RAM_SIZE	0x10000
+#define STACK_ADDR	0xffff
+#define VIDEO_ADDR	0x8000
+
 
 typedef struct s_dcpu
 {
@@ -58,6 +61,14 @@ void dcpu_inst_parse(uint16_t word, uint8_t *op, uint8_t *a, uint8_t *b)
 		*a = (word >> 10);
 		*b = 0;
 	}
+}
+
+// true if the reference is for a literal
+bool is_literal(uint8_t ref)
+{
+	// 0x1f: reference to the next word as a literal
+	// 0x20-0x3f: this ref is a value (ref - 0x20)
+	return (ref >= 0x1f);
 }
 
 // returns a pointer to something based on the provided reference
@@ -133,14 +144,8 @@ uint16_t *dcpu_ref(dcpu_t *cpu, uint8_t ref)
 	return NULL;
 }
 
-bool is_literal(uint8_t ref)
-{
-	// 0x1f: reference to the next word as a literal
-	// 0x20-0x3f: this ref is a value (ref - 0x20)
-	return (ref <= 0x1f);
-}
-
-uint16_t dcpu_value(dcpu_t *cpu, uint8_t ref)
+// get the value at the reference
+uint16_t dcpu_get(dcpu_t *cpu, uint8_t ref)
 {
 	// for most references just deref the pointer
 	if (ref <= 0x1e) {		
@@ -156,18 +161,32 @@ uint16_t dcpu_value(dcpu_t *cpu, uint8_t ref)
 	return ref - 0x20; // ref >= 0x20)
 }
 
+// executes the next instruction
 void dcpu_exec1(dcpu_t *cpu)
 {
-	// executes the next instruction
 	uint8_t op, a, b;
+	uint16_t *a_ptr;
+	uint16_t result;
 	dcpu_inst_parse(cpu->RAM[cpu->PC++], &op, &a, &b);
 
-	// SET a, b - sets a to b
-	if (op == 0x1) {
-		// fail silently if trying to assign to a literal
-		if (is_literal(a) == 0) {
-			*(dcpu_ref(cpu, a)) = dcpu_value(cpu, b);
-		}
+	switch (op) {
+		case 0x01:// SET a, b - sets a to b
+			a_ptr = dcpu_ref(cpu, a); // a is always handled by the processor before b
+			result = dcpu_get(cpu, b);
+			if (is_literal(a) == false) {
+				// *assignment* fail silently if trying to assign to a literal
+				*a_ptr = result;
+			}
+			break;
+		case 0x02:// ADD a, b - sets a to a+b, sets O to 0x0001 if there is's an overflow, 0x0 othterwise
+			a_ptr = dcpu_ref(cpu, a);
+			result = *a_ptr + dcpu_get(cpu, b);
+			if (is_literal(a) == false) {
+				*a_ptr = result;
+			}
+			break;
+		default:
+			printf("Unrecognized opcode %02x\n", op);
 	}
 }
 
@@ -189,15 +208,24 @@ void dcpu_print_state(dcpu_t *cpu)
 
 void dcpu_print_video(dcpu_t *cpu)
 {
-	int base = 0x8000;
 	char row = 0;
 	char col = 0; 
 	for (row = 0; row < 12; row++) {
 		for (col = 0; col < 32; col++) {
-			printf("%c", cpu->RAM[base + (row * 32 + col)]);
+			printf("%c", cpu->RAM[VIDEO_ADDR + (row * 32 + col)]);
 		}
 		printf("\n");
 	}
+}
+
+void dcpu_print_stack(dcpu_t *cpu)
+{
+	uint16_t sp = STACK_ADDR;
+	printf("Stack: ");
+	for (sp = STACK_ADDR - 1; sp >= cpu->SP; sp--) {
+		printf("%04x ", cpu->RAM[sp]);
+	}
+	printf("\n");
 }
 
 void print_bits(uint16_t word)
@@ -280,10 +308,53 @@ int main(int argc, char *argv[])
 
 	// test assigning to a literal
 	// SET 0, A
-	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x20, 0x0);
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x20, 0x0);
 
 	// uint16_t *bad = dcpu_point_at_value(cpu, 0x20);
 	// printf("bad: %p\n", bad);
+
+	// // ADD A, 2
+	// cpu->A = 1;
+	// dcpu_print_state(cpu);
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x2, 0x0, 0x22);
+	// dcpu_exec1(cpu);
+	// dcpu_print_state(cpu);
+
+	// stack test
+	// 3 + (2 + 4)
+	dcpu_print_state(cpu);
+	dcpu_print_stack(cpu);
+	// SET PUSH, 3
+	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1a, 0x23);
+	dcpu_exec1(cpu);
+	dcpu_print_state(cpu);
+	dcpu_print_stack(cpu);
+	// SET PUSH, 2
+	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1a, 0x22);
+	dcpu_exec1(cpu);
+	dcpu_print_state(cpu);
+	dcpu_print_stack(cpu);
+	// SET PUSH, 4
+	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1a, 0x24);
+	dcpu_exec1(cpu);
+	dcpu_print_state(cpu);
+	dcpu_print_stack(cpu);
+	// SET A, POP
+	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x0, 0x18);
+	dcpu_exec1(cpu);
+	dcpu_print_state(cpu);
+	dcpu_print_stack(cpu);
+	// ADD A, POP
+	cpu->RAM[cpu->PC] = dcpu_inst_make(0x2, 0x0, 0x18);
+	dcpu_exec1(cpu);
+	dcpu_print_state(cpu);
+	dcpu_print_stack(cpu);
+	// ADD A, POP
+	cpu->RAM[cpu->PC] = dcpu_inst_make(0x2, 0x0, 0x18);
+	dcpu_exec1(cpu);
+	dcpu_print_state(cpu);
+	dcpu_print_stack(cpu);
+
 
 	return 0;
 }
