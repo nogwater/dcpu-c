@@ -166,43 +166,136 @@ void dcpu_exec1(dcpu_t *cpu)
 {
 	uint8_t op, a, b;
 	uint16_t *a_ptr;
+	uint16_t a_val, b_val;
 	uint32_t result; // holds O and the value for math
+
 	dcpu_inst_parse(cpu->RAM[cpu->PC++], &op, &a, &b);
+
+	a_ptr = dcpu_ref(cpu, a); // a is always handled by the processor before b
+	a_val = (a_ptr != NULL) ? *a_ptr : dcpu_get(cpu, a);
+	b_val = dcpu_get(cpu, b);
+	// TODO: should we set O if a is a literal?
 
 	switch (op) {
 		case 0x01:// SET a, b - sets a to b
-			a_ptr = dcpu_ref(cpu, a); // a is always handled by the processor before b
-			result = dcpu_get(cpu, b);
-			// *assignment* fail silently if trying to assign to a literal
-			if (is_literal(a) == false) *a_ptr = (uint16_t)result;
+			// assignment fail silently if trying to assign to a literal (a_ptr is null)
+			if (a_ptr != NULL) {
+				*a_ptr = b_val;
+				// TODO: should we clear out O?
+			}
 			break;
 		case 0x02:// ADD a, b - sets a to a+b, sets O to 0x0001 if there is's an overflow, 0x0 othterwise
-			a_ptr = dcpu_ref(cpu, a);
-			result = *a_ptr + dcpu_get(cpu, b);
-			if (is_literal(a) == false) *a_ptr = (uint16_t)result;
-			cpu->O = (uint16_t)((result >> 16) & 0xffff);
+			if (a_ptr != NULL) {
+				result = a_val + b_val;
+				*a_ptr = (uint16_t)result;
+				cpu->O = (uint16_t)((result >> 16) & 0xffff);
+			}
 			break;
 		case 0x03:// SUB a, b - sets a to a-b, sets O to 0xffff if there is's an underflow, 0x0 othterwise
-			a_ptr = dcpu_ref(cpu, a);
-			result = *a_ptr - dcpu_get(cpu, b);
-			if (is_literal(a) == false) *a_ptr = (uint16_t)result;
-			cpu->O = (uint16_t)((result >> 16) & 0xffff);
+			if (a_ptr != NULL) {
+				result = a_val - b_val;
+				*a_ptr = (uint16_t)result;
+				cpu->O = (uint16_t)((result >> 16) & 0xffff);
+			}
 			break;
 		case 0x04:// MUL a, b - sets a to a*b, sets a to a*b, sets O to ((a*b)>>16)&0xffff
-			a_ptr = dcpu_ref(cpu, a);
-			result = *a_ptr * dcpu_get(cpu, b);
-			if (is_literal(a) == false) *a_ptr = (uint16_t)result;
-			cpu->O = (uint16_t)((result >> 16) & 0xffff);
+			if (a_ptr != NULL) {
+				result = a_val * b_val;
+				*a_ptr = (uint16_t)result;
+				cpu->O = (uint16_t)((result >> 16) & 0xffff);
+			}
 			break;
-		case 0x05:// DIV a, b - sets a to a*b, sets a to a*b, sets O to ((a*b)>>16)&0xffff
-			a_ptr = dcpu_ref(cpu, a);
-			result = *a_ptr - dcpu_get(cpu, b);
-			if (is_literal(a) == false) *a_ptr = (uint16_t)result;
-			cpu->O = (uint16_t)((result >> 16) & 0xffff);
+		case 0x05:// DIV a, b - sets a to a/b, sets O to ((a<<16)/b)&0xffff. if b==0, sets a and O to 0 instead.
+			if (a_ptr != NULL) {
+				// check for divide by zero
+				if (b_val == 0) {
+					*a_ptr = 0;
+					cpu->O = 0;
+				} else {
+					*a_ptr = a_val / b_val;
+					cpu->O = ((((uint32_t)(a_val)) << 16) / b_val) & 0xffff;
+				}
+			}
+			break;		
+		case 0x06:// MOD a, b - sets a to a%b. if b==0, sets a to 0 instead.
+			if (a_ptr != NULL) {
+				// check for divide by zero
+				if (b_val == 0) {
+					*a_ptr = 0;
+				} else {
+					*a_ptr = a_val % b_val;
+				}
+			}
+			break;
+		case 0x07:// SHL a, b - sets a to a<<b, sets O to ((a<<b)>>16)&0xffff
+			if (a_ptr != NULL) {
+				*a_ptr = a_val << b_val;
+				cpu->O = ((((uint32_t)a_val) << b_val) >> 16) & 0xffff;
+			}
+			break;
+		case 0x08:// SHR a, b - sets a to a>>b, sets O to ((a<<16)>>b)&0xffff
+			if (a_ptr != NULL) {
+				*a_ptr = a_val >> b_val;
+				cpu->O = ((((uint32_t)a_val) << 16) >> b_val) & 0xffff;
+			}
+			break;
+		case 0x09:// AND a, b - sets a to a&b
+			if (a_ptr != NULL) {
+				*a_ptr = a_val & b_val;
+			}
+			break;
+		case 0x0a:// BOR a, b - sets a to a|b
+			if (a_ptr != NULL) {
+				*a_ptr = a_val | b_val;
+			}
+			break;
+		case 0x0b:// XOR a, b - sets a to a^b
+			if (a_ptr != NULL) {
+				*a_ptr = a_val ^ b_val;
+			}
+			break;
+		// Control-Flow
+		case 0x0c:// IFE a, b - performs next instruction only if a==b
+			if (a_val != b_val) {
+				// skip next instruction
+				dcpu_inst_parse(cpu->RAM[cpu->PC++], &op, &a, &b);
+				dcpu_get(cpu, a); // consume next word(s) as needed
+				dcpu_get(cpu, b);
+			}
+			break;
+		case 0x0d:// IFN a, b - performs next instruction only if a!=b
+			if (a_val == b_val) {
+				// skip next instruction
+				dcpu_inst_parse(cpu->RAM[cpu->PC++], &op, &a, &b);
+				dcpu_get(cpu, a); // consume next word(s) as needed
+				dcpu_get(cpu, b);
+			}
+			break;
+		case 0x0e:// IFG a, b - performs next instruction only if a>b
+			if (a_val <= b_val) {
+				// skip next instruction
+				dcpu_inst_parse(cpu->RAM[cpu->PC++], &op, &a, &b);
+				dcpu_get(cpu, a); // consume next word(s) as needed
+				dcpu_get(cpu, b);
+			}
+			break;
+		case 0x0f:// IFB a, b - performs next instruction only if (a&b)!=0
+			if ((a_val & b_val) == 0) {
+				// skip next instruction
+				dcpu_inst_parse(cpu->RAM[cpu->PC++], &op, &a, &b);
+				dcpu_get(cpu, a); // consume next word(s) as needed
+				dcpu_get(cpu, b);
+			}
+			break;
+		// Non-basic opcodes
+		case (0x01 | 0x80)://JSR a - pushes the address of the next instruction to the stack, then sets PC to a
+			cpu->RAM[--(cpu->SP)] = cpu->PC;
+			cpu->PC = a_val;
 			break;
 		default:
 			printf("Unrecognized opcode %02x\n", op);
 	}
+
 }
 
 void dcpu_print_state(dcpu_t *cpu)
@@ -381,15 +474,44 @@ int main(int argc, char *argv[])
 	// dcpu_exec1(cpu);
 	// dcpu_print_state(cpu);
 
-	// underflow
-	// SET A, 1
-	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x0, 0x21);
+	// // underflow
+	// // SET A, 1
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x0, 0x21);
+	// dcpu_exec1(cpu);
+	// dcpu_print_state(cpu);
+	// // ADD A, 2
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x3, 0x0, 0x22);
+	// dcpu_exec1(cpu);
+	// dcpu_print_state(cpu);
+
+	// // MUL
+	// // SET A, 3
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x0, 0x23);
+	// dcpu_exec1(cpu);
+	// dcpu_print_state(cpu);
+	// // SET B, 4
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1, 0x24);
+	// dcpu_exec1(cpu);
+	// dcpu_print_state(cpu);
+	// // MUL A, B
+	// cpu->RAM[cpu->PC] = dcpu_inst_make(0x4, 0x0, 0x1);
+	// dcpu_exec1(cpu);
+	// dcpu_print_state(cpu);
+
+	// DIV
+	// SET A, 6
+	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x0, 0x26);
 	dcpu_exec1(cpu);
 	dcpu_print_state(cpu);
-	// ADD A, 2
-	cpu->RAM[cpu->PC] = dcpu_inst_make(0x3, 0x0, 0x22);
+	// SET B, 2
+	cpu->RAM[cpu->PC] = dcpu_inst_make(0x1, 0x1, 0x22);
 	dcpu_exec1(cpu);
 	dcpu_print_state(cpu);
+	// DIV A, B
+	cpu->RAM[cpu->PC] = dcpu_inst_make(0x5, 0x0, 0x1);
+	dcpu_exec1(cpu);
+	dcpu_print_state(cpu);
+
 
 
 
