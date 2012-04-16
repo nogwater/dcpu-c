@@ -1,7 +1,9 @@
 CFLAGS=-Wall -g
 
-all: dcpu
+all: tests
+
+tests: dcpu.o
 
 clean:
-	rm -f dcpu
-	rm -r dcpu.dSYM
+	rm -f *.o tests
+	rm -r tests.dSYM
